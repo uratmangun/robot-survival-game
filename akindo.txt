@@ -1,0 +1,65 @@
+What it does
+The NERO AI Custodial Wallet is an AI-powered chat interface built on Next.js, enabling users to manage NERO blockchain assets through natural language. Users can connect custodial wallets, query balances, initiate transfers, and inspect token details on NERO chain via tool functions.
+
+
+
+The problem it solves
+Managing NERO chain wallets and interacting on-chain typically requires manual RPC commands or blockchain-specific tools. This project abstracts NERO chain complexities behind a conversational UI, lowering the entry barrier for developers and non-technical users.
+
+
+
+Challenges I ran into
+
+- Configuring NERO testnet and mainnet RPC parameters (chain ID, RPC URLs, explorers).
+
+- Securely handling custodial wallet connections and key management in a client environment.
+
+- Formatting NERO native and token balances with correct decimals.
+
+- Ensuring reliable tool-based on-chain calls with wagmi and viem.
+
+- Handling chat state, AI integration, and pagination for on-chain data.
+
+
+
+Technologies I used
+
+- Next.js & React (Client Components)
+
+- TypeScript
+
+- wagmi & viem for EVM-compatible NERO RPC
+
+- RainbowKit for wallet UI and chain management
+
+- React Markdown for rich chat responses
+
+- pnpm for dependencies
+
+- Docker & Cloudflare Tunnel for deployment
+
+
+
+How we built it
+
+We set up NERO chain parameters (RPC URLs, chain ID) and integrated them into RainbowKit. Tool functions wrap viem calls to query balances and send transactions on NERO. React hooks manage chat state, AI responses, and pagination. The front end renders markdown-formatted messages. The app is containerized with Docker and exposed via Cloudflare Tunnel.
+
+
+
+What we learned
+
+We gained experience in configuring EVM-compatible custom chains, orchestrating secure on-chain calls via wagmi and viem, and building dynamic chat UIs. We also sharpened skills in containerizing and deploying Next.js apps.
+
+
+
+What's next for
+
+- Add multi-account and multi-chain support (mainnet and testnet).
+
+- Persist chat and wallet session data in a backend.
+
+- Implement advanced AI-driven transaction suggestions.
+
+- Integrate Neroscan API for richer on-chain data.
+
+- Deploy to production platforms like Vercel.
