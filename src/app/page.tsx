@@ -24,6 +24,8 @@ export default function Page() {
 
       class MainScene extends Scene3D {
         boxMan: any;
+        robot: any;
+        robotBB: any;
         keys: any;
         constructor() {
           super({ key: "MainScene" });
@@ -66,8 +68,21 @@ export default function Page() {
             const runClip = object.animations.find((c: any) => /(run|walk)/i.test(c.name));
             const idleName = idleClip?.name;
             const runName = runClip?.name;
+            // find open door animations (right and left)
+            const doorRightClip = object.animations.find((c: any) => /open_door_standing_right/i.test(c.name));
+            const doorLeftClip = object.animations.find((c: any) => /open_door_standing_left/i.test(c.name));
+            const doorRightName = doorRightClip?.name;
+            const doorLeftName = doorLeftClip?.name;
+            const doorRightDuration = doorRightClip?.duration || 0;
+            const doorLeftDuration = doorLeftClip?.duration || 0;
+            console.log(object.animations)
             this.boxMan.userData.idleName = idleName;
             this.boxMan.userData.runName = runName;
+            this.boxMan.userData.doorRightName = doorRightName;
+            this.boxMan.userData.doorLeftName = doorLeftName;
+            this.boxMan.userData.doorRightDuration = doorRightDuration;
+            this.boxMan.userData.doorLeftDuration = doorLeftDuration;
+            this.boxMan.userData.isDoorPlaying = false;
             this.boxMan.userData.currentAnim = idleName;
             // play idle by default
             if (idleName) this.boxMan.animation.play(idleName);
@@ -86,12 +101,41 @@ export default function Page() {
             robotObject.scale.setScalar(1 / maxDim);
             robotObject.position.set(5, 0, 0);
             this.third.add.existing(robotObject);
+            this.robot = robotObject;
+            this.robotBB = new THREE.Box3().setFromObject(robotObject);
           });
           // setup WASD controls for boxMan
-          this.keys = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D' });
+          this.keys = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', F: 'F' });
         }
         update() {
+          // update robot bounding box in case it moved
+          if (this.robot) this.robotBB.setFromObject(this.robot);
           if (this.boxMan && this.keys) {
+            // door animation on F key: choose left or right
+            if (this.keys.F.isDown && !this.boxMan.userData.isDoorPlaying) {
+              const useLeft = Math.random() < 0.5;
+              const doorName = useLeft ? this.boxMan.userData.doorLeftName : this.boxMan.userData.doorRightName;
+              const doorDuration = useLeft ? this.boxMan.userData.doorLeftDuration : this.boxMan.userData.doorRightDuration;
+              if (doorName) {
+                this.boxMan.animation.play(doorName);
+                this.boxMan.userData.currentAnim = doorName;
+                this.boxMan.userData.isDoorPlaying = true;
+                // push robot if hand overlaps
+                const manBB = new THREE.Box3().setFromObject(this.boxMan);
+                if (this.robot) {
+                  // expand robot bounding box to give some tolerance
+                  const proximityBB = this.robotBB.clone().expandByScalar(1);
+                  if (manBB.intersectsBox(proximityBB)) {
+                    const pushDir = new THREE.Vector3().subVectors(this.robot.position, this.boxMan.position).normalize();
+                    this.robot.position.add(pushDir.multiplyScalar(0.5));
+                    this.robotBB.setFromObject(this.robot);
+                  }
+                }
+                setTimeout(() => {
+                  this.boxMan.userData.isDoorPlaying = false;
+                }, doorDuration * 1000);
+              }
+            }
             const speed = 0.1;
             // compute movement vector
             let dx = 0, dz = 0;
@@ -102,11 +146,27 @@ export default function Page() {
             const moving = dx !== 0 || dz !== 0;
             // apply movement
             if (moving) {
-              this.boxMan.position.x += dx;
-              this.boxMan.position.z += dz;
-              // face direction
-              const offset = this.boxMan.userData.rotOffset || 0;
-              this.boxMan.rotation.y = offset + Math.atan2(-dx, -dz);
+              const manBB = new THREE.Box3().setFromObject(this.boxMan);
+              let allowX = true;
+              let allowZ = true;
+              // check X axis
+              if (dx !== 0) {
+                const bbX = manBB.clone().translate(new THREE.Vector3(dx, 0, 0));
+                if (this.robotBB && bbX.intersectsBox(this.robotBB)) allowX = false;
+              }
+              // check Z axis
+              if (dz !== 0) {
+                const bbZ = manBB.clone().translate(new THREE.Vector3(0, 0, dz));
+                if (this.robotBB && bbZ.intersectsBox(this.robotBB)) allowZ = false;
+              }
+              // apply valid movement
+              if (allowX) this.boxMan.position.x += dx;
+              if (allowZ) this.boxMan.position.z += dz;
+              // face direction if moved
+              if (allowX || allowZ) {
+                const offset = this.boxMan.userData.rotOffset || 0;
+                this.boxMan.rotation.y = offset + Math.atan2(-dx, -dz);
+              }
             }
             // toggle animations
             const { idleName, runName, currentAnim } = this.boxMan.userData;
