@@ -5,6 +5,17 @@ export default function Page() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarOpen = true;
   const [started, setStarted] = useState<boolean>(false);
+  const gameRef = useRef<any>(null);
+  const robotSpeed = 0.1;
+  const moveRobot = (dx: number, dz: number) => {
+    if (!gameRef.current) return;
+    const scene = gameRef.current.scene.getScene("MainScene");
+    if (scene && scene.robot) {
+      scene.robot.position.x += dx;
+      scene.robot.position.z += dz;
+      scene.robotBB.setFromObject(scene.robot);
+    }
+  };
 
   useEffect(() => {
     let game: any;
@@ -41,7 +52,7 @@ export default function Page() {
           this.third.camera.position.z += 10;
           this.third.camera.position.y += 10;
           // Load box_man via enable3d loader and setup animations
-          this.third.load.gltf('/glb/box_man.glb').then((object: any) => {
+          this.third.load.gltf(String('/glb/box_man.glb')).then((object: any) => {
             const man = object.scene.children[0];
             this.boxMan = new ExtendedObject3D();
             this.boxMan.name = 'box_man';
@@ -88,7 +99,7 @@ export default function Page() {
             if (idleName) this.boxMan.animation.play(idleName);
           });
           // Load robot via enable3d loader
-          this.third.load.gltf('/glb/robot.glb').then((object: any) => {
+          this.third.load.gltf(String('/glb/robot.glb')).then((object: any) => {
             const robot = object.scene.children[0];
             const robotObject = new ExtendedObject3D();
             robotObject.name = 'robot';
@@ -208,7 +219,7 @@ export default function Page() {
       };
 
       if (containerRef.current) {
-        enable3d(() => game = new Phaser.Game(config)).withPhysics("/lib/ammo/kripken");
+        enable3d(() => { game = new Phaser.Game(config); gameRef.current = game; return game; }).withPhysics("/lib/ammo/kripken");
       }
     };
 
@@ -459,12 +470,13 @@ export default function Page() {
                 </div>
               ) : activeTab === 'movement' ? (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <button className="btn mb-2">Up</button>
+                  <button className="btn mb-2" onClick={() => moveRobot(0, -robotSpeed)}>Up</button>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <button className="btn">Left</button>
-                    <button className="btn">Right</button>
+                    <button className="btn" onClick={() => moveRobot(-robotSpeed, 0)}>Left</button>
+                    <button className="btn" onClick={() => moveRobot(robotSpeed, 0)}>Right</button>
                   </div>
-                  <button className="btn">Down</button>
+                  <button className="btn" onClick={() => moveRobot(0, robotSpeed)}>Down</button>
+                  <button className="btn">Punch</button>
                 </div>
               ) : null}
             </>
