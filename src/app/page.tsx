@@ -1,19 +1,91 @@
 "use client";
 import React, { useEffect, useRef, useState } from "react";
+import { Box3, Vector3 } from "three";
 
 export default function Page() {
   const containerRef = useRef<HTMLDivElement>(null);
-  const sidebarOpen = true;
+
   const [started, setStarted] = useState<boolean>(false);
   const gameRef = useRef<any>(null);
   const robotSpeed = 0.1;
+  const pendingMoveRef = useRef<{dx: number; dz: number; hasPending: boolean}>({dx: 0, dz: 0, hasPending: false});
+  const processPendingMove = () => {
+    if (!gameRef.current) return;
+    const scene = gameRef.current.scene.getScene("MainScene");
+    if (!scene || !scene.robot) return;
+    if (!pendingMoveRef.current.hasPending) {
+      scene.robot.userData.isMoving = false;
+      const idleName = scene.robot.userData.idleName;
+      if (idleName) scene.robot.animation.play(idleName);
+      return;
+    }
+    const {dx, dz} = pendingMoveRef.current;
+    pendingMoveRef.current.hasPending = false;
+    if (dx > 0) scene.robot.rotation.y = Math.PI / 2;
+    else if (dx < 0) scene.robot.rotation.y = -Math.PI / 2;
+    else if (dz > 0) scene.robot.rotation.y = 0;
+    else if (dz < 0) scene.robot.rotation.y = Math.PI;
+    const nextBB = scene.robotBB.clone().translate(new Vector3(dx, 0, dz)).expandByScalar(-0.2);
+    const boxManBB = new Box3().setFromObject(scene.boxMan).expandByScalar(0.2);
+    if (!nextBB.intersectsBox(boxManBB)) {
+      scene.robot.position.x += dx * 2;
+      scene.robot.position.z += dz * 2;
+      scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
+    }
+    scene.robot.userData.isMoving = true;
+    const runName = scene.robot.userData.runName || "Running";
+    const duration = scene.robot.userData.runDuration || 0;
+    const action = scene.robot.animation.play(runName);
+    setTimeout(() => {
+      if (action) action.stop();
+      processPendingMove();
+    }, duration * 1000);
+  };
   const moveRobot = (dx: number, dz: number) => {
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
     if (scene && scene.robot) {
-      scene.robot.position.x += dx;
-      scene.robot.position.z += dz;
-      scene.robotBB.setFromObject(scene.robot);
+      pendingMoveRef.current = {dx, dz, hasPending: true};
+      if (!scene.robot.userData.isMoving) processPendingMove();
+    }
+  };
+  const punchRobot = () => {
+    if (!gameRef.current) return;
+    const scene = gameRef.current.scene.getScene("MainScene");
+    if (scene && scene.robot) {
+      const punchName = scene.robot.userData.punchName;
+      const punchDuration = scene.robot.userData.punchDuration || 0;
+      if (punchName) {
+        if (!scene.robot.userData.isPunching) {
+          const playNext = () => {
+            scene.robot.userData.isPunching = true;
+            const action = scene.robot.animation.play(punchName);
+            // push boxMan if punch hits (use robot's bounding box, not just position)
+            scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
+            const manBB = new Box3().setFromObject(scene.boxMan).expandByScalar(0.2);
+            if (manBB.intersectsBox(scene.robotBB)) {
+              // Push boxMan away from the center of intersection, but farther than before
+              const pushDir = new Vector3().subVectors(scene.boxMan.position, scene.robot.position).normalize();
+              scene.boxMan.position.add(pushDir.multiplyScalar(robotSpeed * 2));
+            }
+            setTimeout(() => {
+              if (action) action.stop();
+              if (scene.robot.userData.pendingPunchCount > 0) {
+                scene.robot.userData.pendingPunchCount--;
+                playNext();
+              } else {
+                scene.robot.userData.isPunching = false;
+                const idleName = scene.robot.userData.idleName;
+                if (idleName) scene.robot.animation.play(idleName);
+              }
+            }, punchDuration * 1000);
+          };
+          scene.robot.userData.pendingPunchCount = 0;
+          playNext();
+        } else {
+          scene.robot.userData.pendingPunchCount = (scene.robot.userData.pendingPunchCount || 0) + 1;
+        }
+      }
     }
   };
 
@@ -29,7 +101,6 @@ export default function Page() {
       Canvas = enable3dMod.Canvas;
       ExtendedObject3D = enable3dMod.ExtendedObject3D;
 
-      // import Three.js for bounding box calculations
       const THREEModule = await import("three");
       THREE = THREEModule;
 
@@ -48,16 +119,13 @@ export default function Page() {
 
         async create() {
           this.third.warpSpeed();
-          // Zoom the camera out so the block is clearly visible
           this.third.camera.position.z += 10;
           this.third.camera.position.y += 10;
-          // Load box_man via enable3d loader and setup animations
-          this.third.load.gltf(String('/glb/box_man.glb')).then((object: any) => {
+          this.third.load.gltf('/glb/box_man.glb').then((object: any) => {
             const man = object.scene.children[0];
             this.boxMan = new ExtendedObject3D();
             this.boxMan.name = 'box_man';
             this.boxMan.add(man);
-            // scale model to match physics box size
             const bbox = new THREE.Box3().setFromObject(this.boxMan);
             const size = new THREE.Vector3();
             bbox.getSize(size);
@@ -65,28 +133,22 @@ export default function Page() {
             this.boxMan.scale.setScalar(1 / maxDim);
             this.boxMan.position.set(-5, 0, 0);
             this.third.add.existing(this.boxMan);
-            // initial idle facing: negative Z
             this.boxMan.rotation.y = Math.PI;
-            // store rotation offset for dynamic facing
             this.boxMan.userData.rotOffset = this.boxMan.rotation.y;
-            // setup animations per example
             this.third.animationMixers.add(this.boxMan.animation.mixer);
             object.animations.forEach((clip: any) => {
               if (clip.name) this.boxMan.animation.add(clip.name, clip);
             });
-            // find and store idle and run animations (match 'idle' or 'run'/'walk')
             const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
             const runClip = object.animations.find((c: any) => /(run|walk)/i.test(c.name));
-            const idleName = idleClip?.name;
-            const runName = runClip?.name;
-            // find open door animations (right and left)
             const doorRightClip = object.animations.find((c: any) => /open_door_standing_right/i.test(c.name));
             const doorLeftClip = object.animations.find((c: any) => /open_door_standing_left/i.test(c.name));
+            const idleName = idleClip?.name;
+            const runName = runClip?.name;
             const doorRightName = doorRightClip?.name;
             const doorLeftName = doorLeftClip?.name;
             const doorRightDuration = doorRightClip?.duration || 0;
             const doorLeftDuration = doorLeftClip?.duration || 0;
-            console.log(object.animations)
             this.boxMan.userData.idleName = idleName;
             this.boxMan.userData.runName = runName;
             this.boxMan.userData.doorRightName = doorRightName;
@@ -95,16 +157,13 @@ export default function Page() {
             this.boxMan.userData.doorLeftDuration = doorLeftDuration;
             this.boxMan.userData.isDoorPlaying = false;
             this.boxMan.userData.currentAnim = idleName;
-            // play idle by default
             if (idleName) this.boxMan.animation.play(idleName);
           });
-          // Load robot via enable3d loader
-          this.third.load.gltf(String('/glb/robot.glb')).then((object: any) => {
+          this.third.load.gltf('/glb/robot.glb').then((object: any) => {
             const robot = object.scene.children[0];
             const robotObject = new ExtendedObject3D();
             robotObject.name = 'robot';
             robotObject.add(robot);
-            // scale model to match physics box size
             const bbox = new THREE.Box3().setFromObject(robotObject);
             const size = new THREE.Vector3();
             bbox.getSize(size);
@@ -112,27 +171,35 @@ export default function Page() {
             robotObject.scale.setScalar(1 / maxDim);
             robotObject.position.set(5, 0, 0);
             this.third.add.existing(robotObject);
-            // setup idle animation for robot
             this.third.animationMixers.add(robotObject.animation.mixer);
             object.animations.forEach((clip: any) => {
               if (clip.name) robotObject.animation.add(clip.name, clip);
             });
-            const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
-            const idleName = idleClip?.name;
             console.log(object.animations)
+            const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
+            const runClip = object.animations.find((c: any) => /(run|walk)/i.test(c.name));
+            const punchClip = object.animations.find((c: any) => /Punch/i.test(c.name));
+            const idleName = idleClip?.name;
+            const runName = runClip?.name;
+            const punchName = punchClip?.name;
             robotObject.userData.idleName = idleName;
+            robotObject.userData.runName = runName;
+            robotObject.userData.runDuration = runClip?.duration || 0;
+            robotObject.userData.punchName = punchName;
+            robotObject.userData.punchDuration = punchClip?.duration || 0;
+            robotObject.userData.isMoving = false;
+            robotObject.userData.isPunching = false;
+            robotObject.userData.pendingPunchCount = 0;
+            robotObject.userData.pendingMoveCount = 0;
             if (idleName) robotObject.animation.play(idleName);
             this.robot = robotObject;
-            this.robotBB = new THREE.Box3().setFromObject(robotObject);
+            this.robotBB = new THREE.Box3().setFromObject(robotObject).expandByScalar(-0.2);
           });
-          // setup WASD controls for boxMan
           this.keys = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', F: 'F' });
         }
         update() {
-          // update robot bounding box in case it moved
-          if (this.robot) this.robotBB.setFromObject(this.robot);
+          if (this.robot) this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
           if (this.boxMan && this.keys) {
-            // door animation on F key: choose left or right
             if (this.keys.F.isDown && !this.boxMan.userData.isDoorPlaying) {
               const useLeft = Math.random() < 0.5;
               const doorName = useLeft ? this.boxMan.userData.doorLeftName : this.boxMan.userData.doorRightName;
@@ -141,15 +208,13 @@ export default function Page() {
                 this.boxMan.animation.play(doorName);
                 this.boxMan.userData.currentAnim = doorName;
                 this.boxMan.userData.isDoorPlaying = true;
-                // push robot if hand overlaps
-                const manBB = new THREE.Box3().setFromObject(this.boxMan);
+                const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
                 if (this.robot) {
-                  // expand robot bounding box to give some tolerance
-                  const proximityBB = this.robotBB.clone().expandByScalar(1);
+                  const proximityBB = this.robotBB.clone().expandByScalar(0.5);
                   if (manBB.intersectsBox(proximityBB)) {
                     const pushDir = new THREE.Vector3().subVectors(this.robot.position, this.boxMan.position).normalize();
                     this.robot.position.add(pushDir.multiplyScalar(0.5));
-                    this.robotBB.setFromObject(this.robot);
+                    this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
                   }
                 }
                 setTimeout(() => {
@@ -158,38 +223,31 @@ export default function Page() {
               }
             }
             const speed = 0.1;
-            // compute movement vector
             let dx = 0, dz = 0;
             if (this.keys.W.isDown) dz -= speed;
             if (this.keys.S.isDown) dz += speed;
             if (this.keys.A.isDown) dx -= speed;
             if (this.keys.D.isDown) dx += speed;
             const moving = dx !== 0 || dz !== 0;
-            // apply movement
             if (moving) {
-              const manBB = new THREE.Box3().setFromObject(this.boxMan);
+              const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
               let allowX = true;
               let allowZ = true;
-              // check X axis
               if (dx !== 0) {
                 const bbX = manBB.clone().translate(new THREE.Vector3(dx, 0, 0));
                 if (this.robotBB && bbX.intersectsBox(this.robotBB)) allowX = false;
               }
-              // check Z axis
               if (dz !== 0) {
                 const bbZ = manBB.clone().translate(new THREE.Vector3(0, 0, dz));
                 if (this.robotBB && bbZ.intersectsBox(this.robotBB)) allowZ = false;
               }
-              // apply valid movement
               if (allowX) this.boxMan.position.x += dx;
               if (allowZ) this.boxMan.position.z += dz;
-              // face direction if moved
               if (allowX || allowZ) {
                 const offset = this.boxMan.userData.rotOffset || 0;
                 this.boxMan.rotation.y = offset + Math.atan2(-dx, -dz);
               }
             }
-            // toggle animations
             const { idleName, runName, currentAnim } = this.boxMan.userData;
             if (!moving && idleName && currentAnim !== idleName) {
               this.boxMan.animation.play(idleName);
@@ -204,7 +262,6 @@ export default function Page() {
 
       const config: Phaser.Types.Core.GameConfig = {
         type: Phaser.WEBGL,
-        // Disable Web Audio to avoid 'Cannot resume a closed AudioContext' error
         audio: { noAudio: true },
         transparent: true,
         scale: {
@@ -223,7 +280,6 @@ export default function Page() {
       }
     };
 
-    // start Phaser only after user clicks Start
     if (typeof window !== "undefined" && started) {
       loadPhaserAndEnable3D();
     }
@@ -232,9 +288,6 @@ export default function Page() {
       if (game && game.destroy) game.destroy(true);
     };
   }, [started]);
-
-  // --- Chat State ---
-  type Message = { sender: string; text: string };
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = React.useState("");
@@ -259,12 +312,10 @@ export default function Page() {
 
   function handleStart() {
     if (!playerName.trim()) return;
-    // generate session id
     const id = Math.random().toString(36).substring(2, 8);
     setSessionId(id);
     console.log(`Starting game for ${playerName}`);
     setStarted(true);
-    // Reset bottom bar to original height of 300px
     setBottomHeight(300);
   }
 
@@ -299,7 +350,6 @@ export default function Page() {
 
   return (
     <div style={{ width: "100%", height: "100vh", display: "flex", flexDirection: "column" }}>
-      {/* Top/main content */}
       <div style={{ flex: 1, position: "relative" }}>
         <div
           ref={containerRef}
@@ -309,11 +359,9 @@ export default function Page() {
             left: 0,
             width: "100%",
             height: `calc(100vh - ${bottomHeight}px)`,
-            // zIndex: 1100
           }}
         />
       </div>
-      {/* Bottom bar */}
       <div>
         <div
           style={{
@@ -476,7 +524,7 @@ export default function Page() {
                     <button className="btn" onClick={() => moveRobot(robotSpeed, 0)}>Right</button>
                   </div>
                   <button className="btn" onClick={() => moveRobot(0, robotSpeed)}>Down</button>
-                  <button className="btn">Punch</button>
+                  <button className="btn" onClick={() => punchRobot()}>Punch</button>
                 </div>
               ) : null}
             </>
