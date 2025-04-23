@@ -101,16 +101,6 @@ export default function Page() {
             robotObject.scale.setScalar(1 / maxDim);
             robotObject.position.set(5, 0, 0);
             this.third.add.existing(robotObject);
-            // setup idle animation for robot
-            this.third.animationMixers.add(robotObject.animation.mixer);
-            object.animations.forEach((clip: any) => {
-              if (clip.name) robotObject.animation.add(clip.name, clip);
-            });
-            const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
-            const idleName = idleClip?.name;
-            console.log(object.animations)
-            robotObject.userData.idleName = idleName;
-            if (idleName) robotObject.animation.play(idleName);
             this.robot = robotObject;
             this.robotBB = new THREE.Box3().setFromObject(robotObject);
           });
@@ -227,7 +217,7 @@ export default function Page() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = React.useState("");
-  const [activeTab, setActiveTab] = useState<'chat' | 'list' | 'leaderboard' | 'movement'>("chat");
+  const [activeTab, setActiveTab] = useState<'chat' | 'list' | 'leaderboard'>("chat");
   const [playerName, setPlayerName] = useState<string>("");
   const [sessionId, setSessionId] = useState<string>("");
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -375,12 +365,6 @@ export default function Page() {
                   >
                     Leaderboard
                   </button>
-                  <button
-                    className={`btn mx-1 ${activeTab === 'movement' ? 'btn-primary' : 'btn-outline'}`}
-                    onClick={() => setActiveTab('movement')}
-                  >
-                    Movement
-                  </button>
                 </div>
                 <span className="ml-auto mr-2 font-bold">{`${playerName}-${sessionId}`}</span>
                 <button className="btn btn-outline btn-error" onClick={handleLogout}>
@@ -456,15 +440,6 @@ export default function Page() {
               ) : activeTab === 'leaderboard' ? (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div>Leaderboard content goes here.</div>
-                </div>
-              ) : activeTab === 'movement' ? (
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                  <button className="btn mb-2">Up</button>
-                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-                    <button className="btn">Left</button>
-                    <button className="btn">Right</button>
-                  </div>
-                  <button className="btn">Down</button>
                 </div>
               ) : null}
             </>
