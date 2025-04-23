@@ -10,7 +10,7 @@ importers:
     dependencies:
       '@enable3d/phaser-extension':
         specifier: ^0.26.1
-        version: 0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(phaser@3.88.2)(poly-decomp@0.3.0)(three@0.171.0)
+        version: 0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(phaser@3.88.2)(poly-decomp@0.3.0)(three@0.175.0)
       '@rainbow-me/rainbowkit':
         specifier: ^2.2.4
         version: 2.2.4(@tanstack/react-query@5.74.4(react@19.1.0))(@types/react@19.1.2)(react-dom@19.1.0(react@19.1.0))(react@19.1.0)(viem@2.27.2(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10))(wagmi@2.14.16(@tanstack/query-core@5.74.4)(@tanstack/react-query@5.74.4(react@19.1.0))(@types/react@19.1.2)(bufferutil@4.0.9)(react@19.1.0)(typescript@5.8.3)(utf-8-validate@5.0.10)(viem@2.27.2(bufferutil@4.0.9)(typescript@5.8.3)(utf-8-validate@5.0.10)))
@@ -53,6 +53,9 @@ importers:
       react-markdown:
         specifier: ^10.1.0
         version: 10.1.0(@types/react@19.1.2)(react@19.1.0)
+      three:
+        specifier: ^0.175.0
+        version: 0.175.0
       together-ai:
         specifier: ^0.15.0
         version: 0.15.0(bufferutil@4.0.9)(utf-8-validate@5.0.10)
@@ -3123,8 +3126,8 @@ packages:
       '@types/three': '>= 0.154.0'
       three: '>= 0.154.0'
 
-  three@0.171.0:
-    resolution: {integrity: sha512-Y/lAXPaKZPcEdkKjh0JOAHVv8OOnv/NDJqm0wjfCzyQmfKxV7zvkwsnBgPBKTzJHToSOhRGQAGbPJObT59B/PQ==}
+  three@0.175.0:
+    resolution: {integrity: sha512-nNE3pnTHxXN/Phw768u0Grr7W4+rumGg/H6PgeseNJojkJtmeHJfZWi41Gp2mpXl1pg1pf1zjwR4McM1jTqkpg==}
 
   thrift@0.11.0:
     resolution: {integrity: sha512-UpsBhOC45a45TpeHOXE4wwYwL8uD2apbHTbtBvkwtUU4dNwCjC7DpQTjw2Q6eIdfNtw+dKthdwq94uLXTJPfFw==}
@@ -3597,55 +3600,55 @@ snapshots:
 
   '@emotion/memoize@0.7.1': {}
 
-  '@enable3d/ammo-physics@0.26.1(@types/three@0.171.0)(three@0.171.0)':
+  '@enable3d/ammo-physics@0.26.1(@types/three@0.171.0)(three@0.175.0)':
     dependencies:
-      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.171.0)
-      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.171.0)
+      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.175.0)
+      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.175.0)
       '@types/three': 0.171.0
       '@yandeu/events': 0.0.7
-      three: 0.171.0
+      three: 0.175.0
 
-  '@enable3d/common@0.26.1(@types/three@0.171.0)(three@0.171.0)':
+  '@enable3d/common@0.26.1(@types/three@0.171.0)(three@0.175.0)':
     dependencies:
-      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.171.0)
+      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.175.0)
       '@yandeu/events': 0.0.7
     transitivePeerDependencies:
       - '@types/three'
       - three
 
-  '@enable3d/phaser-extension@0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(phaser@3.88.2)(poly-decomp@0.3.0)(three@0.171.0)':
+  '@enable3d/phaser-extension@0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(phaser@3.88.2)(poly-decomp@0.3.0)(three@0.175.0)':
     dependencies:
-      '@enable3d/ammo-physics': 0.26.1(@types/three@0.171.0)(three@0.171.0)
-      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.171.0)
-      '@enable3d/three-graphics': 0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(poly-decomp@0.3.0)(three@0.171.0)
-      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.171.0)
+      '@enable3d/ammo-physics': 0.26.1(@types/three@0.171.0)(three@0.175.0)
+      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.175.0)
+      '@enable3d/three-graphics': 0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(poly-decomp@0.3.0)(three@0.175.0)
+      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.175.0)
       '@types/three': 0.171.0
       '@yandeu/events': 0.0.7
       phaser: 3.88.2
-      three: 0.171.0
+      three: 0.175.0
     transitivePeerDependencies:
       - '@types/matter-js'
       - matter-js
       - poly-decomp
 
-  '@enable3d/three-graphics@0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(poly-decomp@0.3.0)(three@0.171.0)':
+  '@enable3d/three-graphics@0.26.1(@types/matter-js@0.17.6)(@types/three@0.171.0)(matter-js@0.17.1)(poly-decomp@0.3.0)(three@0.175.0)':
     dependencies:
-      '@enable3d/ammo-physics': 0.26.1(@types/three@0.171.0)(three@0.171.0)
-      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.171.0)
-      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.171.0)
+      '@enable3d/ammo-physics': 0.26.1(@types/three@0.171.0)(three@0.175.0)
+      '@enable3d/common': 0.26.1(@types/three@0.171.0)(three@0.175.0)
+      '@enable3d/three-wrapper': 0.26.1(@types/three@0.171.0)(three@0.175.0)
       '@types/matter-js': 0.17.6
       '@types/three': 0.171.0
       '@yandeu/events': 0.0.7
       '@yandeu/tap': 0.0.3
       matter-js: 0.17.1
       poly-decomp: 0.3.0
-      three: 0.171.0
-      three-csg-ts: 3.2.0(@types/three@0.171.0)(three@0.171.0)
+      three: 0.175.0
+      three-csg-ts: 3.2.0(@types/three@0.171.0)(three@0.175.0)
 
-  '@enable3d/three-wrapper@0.26.1(@types/three@0.171.0)(three@0.171.0)':
+  '@enable3d/three-wrapper@0.26.1(@types/three@0.171.0)(three@0.175.0)':
     dependencies:
       '@types/three': 0.171.0
-      three: 0.171.0
+      three: 0.175.0
 
   '@eslint-community/eslint-utils@4.6.1(eslint@9.25.0(jiti@2.4.2))':
     dependencies:
@@ -7430,12 +7433,12 @@ snapshots:
     dependencies:
       real-require: 0.1.0
 
-  three-csg-ts@3.2.0(@types/three@0.171.0)(three@0.171.0):
+  three-csg-ts@3.2.0(@types/three@0.171.0)(three@0.175.0):
     dependencies:
       '@types/three': 0.171.0
-      three: 0.171.0
+      three: 0.175.0
 
-  three@0.171.0: {}
+  three@0.175.0: {}
 
   thrift@0.11.0(bufferutil@4.0.9)(utf-8-validate@5.0.10):
     dependencies:

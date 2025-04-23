@@ -4,10 +4,11 @@ import React, { useEffect, useRef, useState } from "react";
 export default function Page() {
   const containerRef = useRef<HTMLDivElement>(null);
   const sidebarOpen = true;
+  const [started, setStarted] = useState<boolean>(false);
 
   useEffect(() => {
     let game: any;
-    let enable3d: any, Scene3D: any, Canvas: any, Phaser: any;
+    let enable3d: any, Scene3D: any, Canvas: any, Phaser: any, ExtendedObject3D: any, THREE: any;
 
     const loadPhaserAndEnable3D = async () => {
       Phaser = await import("phaser");
@@ -15,8 +16,15 @@ export default function Page() {
       enable3d = enable3dMod.enable3d;
       Scene3D = enable3dMod.Scene3D;
       Canvas = enable3dMod.Canvas;
+      ExtendedObject3D = enable3dMod.ExtendedObject3D;
+
+      // import Three.js for bounding box calculations
+      const THREEModule = await import("three");
+      THREE = THREEModule;
 
       class MainScene extends Scene3D {
+        boxMan: any;
+        keys: any;
         constructor() {
           super({ key: "MainScene" });
         }
@@ -25,22 +33,91 @@ export default function Page() {
           this.accessThirdDimension();
         }
 
-        create() {
+        async create() {
           this.third.warpSpeed();
-          this.third.physics.add.box();
           // Zoom the camera out so the block is clearly visible
           this.third.camera.position.z += 10;
           this.third.camera.position.y += 10;
-          console.log(this)
-          const resize = () => {
-          
-       console.log(window.innerHeight)
-            this.renderer.canvas.width = window.innerWidth;
-            this.renderer.canvas.height = window.innerHeight;
+          // Load box_man via enable3d loader and setup animations
+          this.third.load.gltf('/glb/box_man.glb').then((object: any) => {
+            const man = object.scene.children[0];
+            this.boxMan = new ExtendedObject3D();
+            this.boxMan.name = 'box_man';
+            this.boxMan.add(man);
+            // scale model to match physics box size
+            const bbox = new THREE.Box3().setFromObject(this.boxMan);
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            this.boxMan.scale.setScalar(1 / maxDim);
+            this.boxMan.position.set(-5, 0, 0);
+            this.third.add.existing(this.boxMan);
+            // initial idle facing: negative Z
+            this.boxMan.rotation.y = Math.PI;
+            // store rotation offset for dynamic facing
+            this.boxMan.userData.rotOffset = this.boxMan.rotation.y;
+            // setup animations per example
+            this.third.animationMixers.add(this.boxMan.animation.mixer);
+            object.animations.forEach((clip: any) => {
+              if (clip.name) this.boxMan.animation.add(clip.name, clip);
+            });
+            // find and store idle and run animations (match 'idle' or 'run'/'walk')
+            const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
+            const runClip = object.animations.find((c: any) => /(run|walk)/i.test(c.name));
+            const idleName = idleClip?.name;
+            const runName = runClip?.name;
+            this.boxMan.userData.idleName = idleName;
+            this.boxMan.userData.runName = runName;
+            this.boxMan.userData.currentAnim = idleName;
+            // play idle by default
+            if (idleName) this.boxMan.animation.play(idleName);
+          });
+          // Load robot via enable3d loader
+          this.third.load.gltf('/glb/robot.glb').then((object: any) => {
+            const robot = object.scene.children[0];
+            const robotObject = new ExtendedObject3D();
+            robotObject.name = 'robot';
+            robotObject.add(robot);
+            // scale model to match physics box size
+            const bbox = new THREE.Box3().setFromObject(robotObject);
+            const size = new THREE.Vector3();
+            bbox.getSize(size);
+            const maxDim = Math.max(size.x, size.y, size.z);
+            robotObject.scale.setScalar(1 / maxDim);
+            robotObject.position.set(5, 0, 0);
+            this.third.add.existing(robotObject);
+          });
+          // setup WASD controls for boxMan
+          this.keys = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D' });
+        }
+        update() {
+          if (this.boxMan && this.keys) {
+            const speed = 0.1;
+            // compute movement vector
+            let dx = 0, dz = 0;
+            if (this.keys.W.isDown) dz -= speed;
+            if (this.keys.S.isDown) dz += speed;
+            if (this.keys.A.isDown) dx -= speed;
+            if (this.keys.D.isDown) dx += speed;
+            const moving = dx !== 0 || dz !== 0;
+            // apply movement
+            if (moving) {
+              this.boxMan.position.x += dx;
+              this.boxMan.position.z += dz;
+              // face direction
+              const offset = this.boxMan.userData.rotOffset || 0;
+              this.boxMan.rotation.y = offset + Math.atan2(-dx, -dz);
+            }
+            // toggle animations
+            const { idleName, runName, currentAnim } = this.boxMan.userData;
+            if (!moving && idleName && currentAnim !== idleName) {
+              this.boxMan.animation.play(idleName);
+              this.boxMan.userData.currentAnim = idleName;
+            } else if (moving && runName && currentAnim !== runName) {
+              this.boxMan.animation.play(runName);
+              this.boxMan.userData.currentAnim = runName;
+            }
           }
-
-          window.onresize = resize
-          resize()
         }
       }
 
@@ -65,14 +142,15 @@ export default function Page() {
       }
     };
 
-    if (typeof window !== "undefined") {
+    // start Phaser only after user clicks Start
+    if (typeof window !== "undefined" && started) {
       loadPhaserAndEnable3D();
     }
 
     return () => {
       if (game && game.destroy) game.destroy(true);
     };
-  }, []);
+  }, [started]);
 
   // --- Chat State ---
   type Message = { sender: string; text: string };
@@ -81,7 +159,7 @@ export default function Page() {
   const [chatInput, setChatInput] = React.useState("");
   const [activeTab, setActiveTab] = useState<'chat' | 'list' | 'leaderboard'>("chat");
   const [playerName, setPlayerName] = useState<string>("");
-  const [started, setStarted] = useState<boolean>(false);
+  const [sessionId, setSessionId] = useState<string>("");
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [bottomHeight, setBottomHeight] = useState<number>(300);
   const isResizing = useRef<boolean>(false);
@@ -100,13 +178,19 @@ export default function Page() {
 
   function handleStart() {
     if (!playerName.trim()) return;
+    // generate session id
+    const id = Math.random().toString(36).substring(2, 8);
+    setSessionId(id);
     console.log(`Starting game for ${playerName}`);
     setStarted(true);
+    // Reset bottom bar to original height of 300px
+    setBottomHeight(300);
   }
 
   function handleLogout() {
     setStarted(false);
     setPlayerName("");
+    setSessionId("");
     setActiveTab('chat');
     setMessages([]);
   }
@@ -169,7 +253,7 @@ export default function Page() {
             left: 0,
             bottom: 0,
             width: "100%",
-            height: bottomHeight,
+            height: started ? bottomHeight : '75vh',
             background: "#fff",
             boxShadow: "0 -2px 8px rgba(0,0,0,0.08)",
             zIndex: 1099,
@@ -181,6 +265,7 @@ export default function Page() {
         >
           {!started && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+              <img src="/title.png" alt="Title" className="mb-2" style={{ maxWidth: 200 }} />
               <label className="label">
                 <span className="label-text font-bold">Name</span>
               </label>
@@ -200,7 +285,7 @@ export default function Page() {
           )}
           {started && (
             <>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex items-center mb-4">
                 <div className="btn-group">
                   <button
                     className={`btn mx-1 ${activeTab === 'chat' ? 'btn-primary' : 'btn-outline'}`}
@@ -221,6 +306,7 @@ export default function Page() {
                     Leaderboard
                   </button>
                 </div>
+                <span className="ml-auto mr-2 font-bold">{`${playerName}-${sessionId}`}</span>
                 <button className="btn btn-outline btn-error" onClick={handleLogout}>
                   Logout
                 </button>
