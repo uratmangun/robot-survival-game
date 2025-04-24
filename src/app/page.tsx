@@ -13,6 +13,11 @@ export default function Page() {
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
     if (!scene || !scene.robot) return;
+    if (scene.robot.userData.isPunching) {
+      scene.robot.animation.mixer.stopAllAction();
+      scene.robot.userData.isPunching = false;
+      scene.robot.userData.pendingPunchCount = 0;
+    }
     if (!pendingMoveRef.current.hasPending) {
       scene.robot.userData.isMoving = false;
       const idleName = scene.robot.userData.idleName;
@@ -45,14 +50,25 @@ export default function Page() {
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
     if (scene && scene.robot) {
+      if (scene.robot.userData.isPunching) {
+        // interrupt punch when moving
+        scene.robot.animation.mixer.stopAllAction();
+        scene.robot.userData.isPunching = false;
+        scene.robot.userData.pendingPunchCount = 0;
+      }
       pendingMoveRef.current = {dx, dz, hasPending: true};
-      if (!scene.robot.userData.isMoving) processPendingMove();
+      processPendingMove();
     }
   };
   const punchRobot = () => {
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
     if (scene && scene.robot) {
+      if (scene.robot.userData.isMoving) {
+        scene.robot.animation.mixer.stopAllAction();
+        scene.robot.userData.isMoving = false;
+        pendingMoveRef.current.hasPending = false;
+      }
       const punchName = scene.robot.userData.punchName;
       const punchDuration = scene.robot.userData.punchDuration || 0;
       if (punchName) {
@@ -60,13 +76,13 @@ export default function Page() {
           const playNext = () => {
             scene.robot.userData.isPunching = true;
             const action = scene.robot.animation.play(punchName);
-            // push boxMan if punch hits (use robot's bounding box, not just position)
+            if (action) action.timeScale = 3;
+            // push boxMan when robot intersects boxMan
             scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
             const manBB = new Box3().setFromObject(scene.boxMan).expandByScalar(0.2);
             if (manBB.intersectsBox(scene.robotBB)) {
-              // Push boxMan away from the center of intersection, but farther than before
               const pushDir = new Vector3().subVectors(scene.boxMan.position, scene.robot.position).normalize();
-              scene.boxMan.position.add(pushDir.multiplyScalar(robotSpeed * 2));
+              scene.boxMan.position.add(pushDir.multiplyScalar(robotSpeed * 5));
             }
             setTimeout(() => {
               if (action) action.stop();
@@ -78,7 +94,7 @@ export default function Page() {
                 const idleName = scene.robot.userData.idleName;
                 if (idleName) scene.robot.animation.play(idleName);
               }
-            }, punchDuration * 1000);
+            }, punchDuration * 1000 / 3);
           };
           scene.robot.userData.pendingPunchCount = 0;
           playNext();
@@ -168,7 +184,7 @@ export default function Page() {
             const size = new THREE.Vector3();
             bbox.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
-            robotObject.scale.setScalar(1 / maxDim);
+            robotObject.scale.setScalar(3 / maxDim);
             robotObject.position.set(5, 0, 0);
             this.third.add.existing(robotObject);
             this.third.animationMixers.add(robotObject.animation.mixer);
@@ -177,7 +193,7 @@ export default function Page() {
             });
             console.log(object.animations)
             const idleClip = object.animations.find((c: any) => /idle/i.test(c.name));
-            const runClip = object.animations.find((c: any) => /(run|walk)/i.test(c.name));
+            const runClip = object.animations.find((c: any) => /Running/i.test(c.name));
             const punchClip = object.animations.find((c: any) => /Punch/i.test(c.name));
             const idleName = idleClip?.name;
             const runName = runClip?.name;
@@ -255,6 +271,27 @@ export default function Page() {
             } else if (moving && runName && currentAnim !== runName) {
               this.boxMan.animation.play(runName);
               this.boxMan.userData.currentAnim = runName;
+            }
+          }
+          // respawn boxMan to random position inside default ground if it leaves boundary
+          if (this.boxMan) {
+            const manBB = new THREE.Box3().setFromObject(this.boxMan);
+            const boundary = 10;
+            if (manBB.min.x > boundary || manBB.max.x < -boundary || manBB.min.z > boundary || manBB.max.z < -boundary) {
+              const x = Math.random() * 2 * boundary - boundary;
+              const z = Math.random() * 2 * boundary - boundary;
+              this.boxMan.position.set(x, 0, z);
+            }
+          }
+          // respawn robot to random position inside default ground if it leaves boundary
+          if (this.robot) {
+            const robotBB = new THREE.Box3().setFromObject(this.robot).expandByScalar(-0.2);
+            const boundary = 10;
+            if (robotBB.min.x > boundary || robotBB.max.x < -boundary || robotBB.min.z > boundary || robotBB.max.z < -boundary) {
+              const xR = Math.random() * 2 * boundary - boundary;
+              const zR = Math.random() * 2 * boundary - boundary;
+              this.robot.position.set(xR, 0, zR);
+              this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
             }
           }
         }
