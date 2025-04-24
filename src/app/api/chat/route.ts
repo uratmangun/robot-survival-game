@@ -12,84 +12,29 @@ export async function POST(request: Request) {
       {
         type: "function",
         function: {
-          name: "check_address",
-          description: "Get the connected wallet address.",
+          name: "move",
+          description: "move the player",
+          parameters: {
+            type: "object",
+            properties: {
+              direction: {
+                type: "string",
+                enum: ["left", "right", "up", "down"],
+                description: "direction to move the player",
+              }
+            },
+            additionalProperties: false,
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "punch",
+          description: "punch something in front of you",
           parameters: {
             type: "object",
             properties: {},
-            additionalProperties: false,
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "check_balance",
-          description: "Get the balance of the connected wallet or an ERC-20 token if address is provided.",
-          parameters: {
-            type: "object",
-            properties: {
-              address: {
-                type: "string",
-                description: "Optional user address.",
-              }
-            },
-            additionalProperties: false,
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "faucet",
-          description: "Show the faucet URL.",
-          parameters: {
-            type: "object",
-            properties: {},
-            additionalProperties: false,
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "mint_test_token",
-          description: "Mint test tokens to the connected wallet.",
-          parameters: {
-            type: "object",
-            properties: {
-              amount: {
-                type: "string",
-                description: "Amount of test tokens to mint."
-              }
-            },
-            required: ["amount"],
-            additionalProperties: false,
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "transfer",
-          description: "Transfer tokens or ETH to a specified address.",
-          parameters: {
-            type: "object",
-            properties: {
-              address: {
-                type: "string",
-                description: "Recipient address."
-              },
-              amount: {
-                type: "string",
-                description: "Amount to transfer."
-              },
-              token_name: {
-                type: "string",
-                description: "Optional ERC-20 token name."
-              }
-            },
-            required: ["address", "amount"],
             additionalProperties: false,
           },
         },
@@ -97,15 +42,11 @@ export async function POST(request: Request) {
     ];
     const systemMessage = {
       role: "system",
-      content: `This chatbot is intended solely for interacting with the Base Ethereum and Base Sepolia networks.
-Available tool calls:
-  - check_address: Get the connected wallet address.
-  - check_balance: Get the balance of the connected wallet optional address (string).
-  - faucet: Show the faucet URL for obtaining testnet tokens.
-  - mint_test_token: Mint test tokens to the connected wallet. Requires parameter: amount (number).
-  - transfer: Transfer tokens or ETH to a specified address. Requires parameters: address (string), amount (string), and optional token_name (string).
-
-If a question falls outside these tools, respond with list of the tools they can use and their descriptions.`,
+      content: `You are a game controller. Use the available tools as needed:
+  • move(direction: "left" | "right" | "up" | "down"): moves the player accordingly
+  • punch(): makes the player punch objects in front
+  If user asks you to do something that is not possible, list all the things you can do instead.
+`,
     };
     const payloadMessages = [systemMessage, ...messages];
     const response = await openai.chat.completions.create({

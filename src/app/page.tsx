@@ -2,6 +2,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Box3, Vector3 } from "three";
 
+// Define chat message types, including function call messages
+type Message =
+  | { sender: 'user'; text: string }
+  | { sender: 'ai'; text: string }
+  | { sender: 'ai_tool'; functionName: string; toolArgs: any };
+
 export default function Page() {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -215,7 +221,7 @@ export default function Page() {
         }
         update() {
           if (this.robot) this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
-          if (this.boxMan && this.keys) {
+          if (false && this.boxMan && this.keys) {
             if (this.keys.F.isDown && !this.boxMan.userData.isDoorPlaying) {
               const useLeft = Math.random() < 0.5;
               const doorName = useLeft ? this.boxMan.userData.doorLeftName : this.boxMan.userData.doorRightName;
@@ -335,16 +341,37 @@ export default function Page() {
   const [bottomHeight, setBottomHeight] = useState<number>(300);
   const isResizing = useRef<boolean>(false);
 
-  function handleSend(e: React.FormEvent) {
+  async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     const input = chatInput.trim();
     if (!input) return;
-    setMessages((prev) => [
-      ...prev,
-      { sender: "user", text: input },
-      { sender: "ai", text: `AI Assistant: You said "${input}"` }
-    ]);
+    // add user message
+    setMessages(prev => [...prev, { sender: 'user', text: input }]);
     setChatInput("");
+    // call chat API
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: input }] }),
+      });
+      const { content, tool_calls } = await res.json();
+      // assistant reply (only if content)
+      if (content) setMessages(prev => [...prev, { sender: 'ai', text: content }]);
+      // function calls (parse name & args)
+      tool_calls?.forEach((call: any) => {
+        const fn = call.function;
+        let args;
+        try {
+          args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments;
+        } catch {
+          args = {};
+        }
+        setMessages(prev => [...prev, { sender: 'ai_tool', functionName: fn.name, toolArgs: args }]);
+      });
+    } catch (err) {
+      console.error('Chat error', err);
+    }
   }
 
   function handleStart() {
@@ -486,23 +513,48 @@ export default function Page() {
               {activeTab === 'chat' ? (
                 <>
                   <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {messages.map((msg, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
-                          background: msg.sender === 'user' ? '#222' : '#f1f1f1',
-                          color: msg.sender === 'user' ? '#fff' : '#222',
-                          borderRadius: '16px',
-                          padding: '12px 18px',
-                          maxWidth: '85%',
-                          boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
-                          marginTop: idx === 0 ? 8 : 0,
-                        }}
-                      >
-                        {msg.sender === 'ai' ? <b>AI Assistant:</b> : <b>{playerName}:</b>} {msg.text.replace(/^AI Assistant: /, '')}
-                      </div>
-                    ))}
+                    {messages.map((msg, idx) => {
+                      // skip empty AI content
+                      if (msg.sender === 'ai' && !msg.text) return null;
+                      if (msg.sender === 'ai_tool') {
+                        return (
+                          <div
+                            key={idx}
+                            style={{
+                              alignSelf: 'flex-start',
+                              background: '#e0f7fa',
+                              color: '#006064',
+                              borderRadius: '16px',
+                              padding: '12px 18px',
+                              maxWidth: '85%',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                              marginTop: idx === 0 ? 8 : 0,
+                            }}
+                          >
+                            <b>Function Call:</b> {msg.functionName}
+                            <br />
+                            <code>{JSON.stringify(msg.toolArgs)}</code>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start',
+                            background: msg.sender === 'user' ? '#222' : '#f1f1f1',
+                            color: msg.sender === 'user' ? '#fff' : '#222',
+                            borderRadius: '16px',
+                            padding: '12px 18px',
+                            maxWidth: '85%',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.03)',
+                            marginTop: idx === 0 ? 8 : 0,
+                          }}
+                        >
+                          {msg.sender === 'user' ? <b>{playerName}:</b> : <b>AI Assistant:</b>} {msg.text}
+                        </div>
+                      );
+                    })}
                   </div>
                   <form
                     style={{
