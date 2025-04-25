@@ -111,6 +111,21 @@ export default function Page() {
     }
   };
 
+  const moveBoxman = (dx: number, dz: number) => {
+    if (!gameRef.current) return;
+    const scene = gameRef.current.scene.getScene("MainScene");
+    if (scene && typeof scene.moveBoxman === "function") {
+      scene.moveBoxman(dx, dz);
+    }
+  };
+  const punchBoxman = () => {
+    if (!gameRef.current) return;
+    const scene = gameRef.current.scene.getScene("MainScene");
+    if (scene && typeof scene.punchBoxman === "function") {
+      scene.punchBoxman();
+    }
+  };
+
   useEffect(() => {
     let game: any;
     let enable3d: any, Scene3D: any, Canvas: any, Phaser: any, ExtendedObject3D: any, THREE: any;
@@ -130,7 +145,7 @@ export default function Page() {
         boxMan: any;
         robot: any;
         robotBB: any;
-        keys: any;
+
         constructor() {
           super({ key: "MainScene" });
         }
@@ -173,6 +188,7 @@ export default function Page() {
             const doorLeftDuration = doorLeftClip?.duration || 0;
             this.boxMan.userData.idleName = idleName;
             this.boxMan.userData.runName = runName;
+            this.boxMan.userData.runDuration = runClip?.duration || 0;
             this.boxMan.userData.doorRightName = doorRightName;
             this.boxMan.userData.doorLeftName = doorLeftName;
             this.boxMan.userData.doorRightDuration = doorRightDuration;
@@ -217,68 +233,9 @@ export default function Page() {
             this.robot = robotObject;
             this.robotBB = new THREE.Box3().setFromObject(robotObject).expandByScalar(-0.2);
           });
-          this.keys = this.input.keyboard.addKeys({ W: 'W', A: 'A', S: 'S', D: 'D', F: 'F' });
         }
         update() {
           if (this.robot) this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
-          if (false && this.boxMan && this.keys) {
-            if (this.keys.F.isDown && !this.boxMan.userData.isDoorPlaying) {
-              const useLeft = Math.random() < 0.5;
-              const doorName = useLeft ? this.boxMan.userData.doorLeftName : this.boxMan.userData.doorRightName;
-              const doorDuration = useLeft ? this.boxMan.userData.doorLeftDuration : this.boxMan.userData.doorRightDuration;
-              if (doorName) {
-                this.boxMan.animation.play(doorName);
-                this.boxMan.userData.currentAnim = doorName;
-                this.boxMan.userData.isDoorPlaying = true;
-                const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
-                if (this.robot) {
-                  const proximityBB = this.robotBB.clone().expandByScalar(0.5);
-                  if (manBB.intersectsBox(proximityBB)) {
-                    const pushDir = new THREE.Vector3().subVectors(this.robot.position, this.boxMan.position).normalize();
-                    this.robot.position.add(pushDir.multiplyScalar(0.5));
-                    this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
-                  }
-                }
-                setTimeout(() => {
-                  this.boxMan.userData.isDoorPlaying = false;
-                }, doorDuration * 1000);
-              }
-            }
-            const speed = 0.1;
-            let dx = 0, dz = 0;
-            if (this.keys.W.isDown) dz -= speed;
-            if (this.keys.S.isDown) dz += speed;
-            if (this.keys.A.isDown) dx -= speed;
-            if (this.keys.D.isDown) dx += speed;
-            const moving = dx !== 0 || dz !== 0;
-            if (moving) {
-              const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
-              let allowX = true;
-              let allowZ = true;
-              if (dx !== 0) {
-                const bbX = manBB.clone().translate(new THREE.Vector3(dx, 0, 0));
-                if (this.robotBB && bbX.intersectsBox(this.robotBB)) allowX = false;
-              }
-              if (dz !== 0) {
-                const bbZ = manBB.clone().translate(new THREE.Vector3(0, 0, dz));
-                if (this.robotBB && bbZ.intersectsBox(this.robotBB)) allowZ = false;
-              }
-              if (allowX) this.boxMan.position.x += dx;
-              if (allowZ) this.boxMan.position.z += dz;
-              if (allowX || allowZ) {
-                const offset = this.boxMan.userData.rotOffset || 0;
-                this.boxMan.rotation.y = offset + Math.atan2(-dx, -dz);
-              }
-            }
-            const { idleName, runName, currentAnim } = this.boxMan.userData;
-            if (!moving && idleName && currentAnim !== idleName) {
-              this.boxMan.animation.play(idleName);
-              this.boxMan.userData.currentAnim = idleName;
-            } else if (moving && runName && currentAnim !== runName) {
-              this.boxMan.animation.play(runName);
-              this.boxMan.userData.currentAnim = runName;
-            }
-          }
           // respawn boxMan to random position inside default ground if it leaves boundary
           if (this.boxMan) {
             const manBB = new THREE.Box3().setFromObject(this.boxMan);
@@ -299,6 +256,76 @@ export default function Page() {
               this.robot.position.set(xR, 0, zR);
               this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
             }
+          }
+        }
+        // AI-driven boxMan controls
+        moveBoxman(dx: number, dz: number) {
+          if (!this.boxMan) return;
+          const factor = 2;
+          const moveX = dx * factor;
+          const moveZ = dz * factor;
+          const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
+          let allowX = true, allowZ = true;
+          if (dx !== 0) {
+            const bbX = manBB.clone().translate(new THREE.Vector3(moveX, 0, 0));
+            if (this.robotBB && bbX.intersectsBox(this.robotBB)) allowX = false;
+          }
+          if (dz !== 0) {
+            const bbZ = manBB.clone().translate(new THREE.Vector3(0, 0, moveZ));
+            if (this.robotBB && bbZ.intersectsBox(this.robotBB)) allowZ = false;
+          }
+          if (allowX) this.boxMan.position.x += moveX;
+          if (allowZ) this.boxMan.position.z += moveZ;
+          const moving = allowX || allowZ;
+          const offset = this.boxMan.userData.rotOffset || 0;
+          this.boxMan.rotation.y = offset + Math.atan2(-moveX, -moveZ);
+          const runName = this.boxMan.userData.runName;
+          const idleName = this.boxMan.userData.idleName;
+          if (moving && runName) {
+            const action = this.boxMan.animation.play(runName);
+            this.boxMan.userData.currentAnim = runName;
+            const duration = this.boxMan.userData.runDuration || 0;
+            setTimeout(() => {
+              if (action) action.stop();
+              if (idleName) {
+                this.boxMan.animation.play(idleName);
+                this.boxMan.userData.currentAnim = idleName;
+              }
+            }, duration * 1000);
+          } else if (!moving && idleName) {
+            if (this.boxMan.userData.currentAnim !== idleName) {
+              this.boxMan.animation.play(idleName);
+              this.boxMan.userData.currentAnim = idleName;
+            }
+          }
+        }
+        punchBoxman() {
+          if (!this.boxMan || this.boxMan.userData.isDoorPlaying) return;
+          const useLeft = Math.random() < 0.5;
+          const doorName = useLeft ? this.boxMan.userData.doorLeftName : this.boxMan.userData.doorRightName;
+          const doorDuration = useLeft ? this.boxMan.userData.doorLeftDuration : this.boxMan.userData.doorRightDuration;
+          if (doorName) {
+            const action = this.boxMan.animation.play(doorName);
+            this.boxMan.userData.currentAnim = doorName;
+            this.boxMan.userData.isDoorPlaying = true;
+            const manBB = new THREE.Box3().setFromObject(this.boxMan).expandByScalar(0.2);
+            if (this.robot) {
+              const proximityBB = this.robotBB.clone().expandByScalar(0.5);
+              if (manBB.intersectsBox(proximityBB)) {
+                const pushDir = new THREE.Vector3().subVectors(this.robot.position, this.boxMan.position).normalize();
+                this.robot.position.add(pushDir.multiplyScalar(0.5));
+                this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
+              }
+            }
+            setTimeout(() => {
+              if (action) action.stop();
+              this.boxMan.userData.isDoorPlaying = false;
+              const idleName = this.boxMan.userData.idleName;
+              if (idleName) {
+                this.boxMan.animation.play(idleName);
+                this.boxMan.userData.currentAnim = idleName;
+              }
+            }, doorDuration * 1000);
           }
         }
       }
@@ -334,12 +361,16 @@ export default function Page() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [chatInput, setChatInput] = React.useState("");
-  const [activeTab, setActiveTab] = useState<'chat' | 'list' | 'leaderboard' | 'movement'>("chat");
+  const [activeTab, setActiveTab] = useState<'chat' | 'list' | 'leaderboard' | 'movement' | 'position'>("chat");
   const [playerName, setPlayerName] = useState<string>("");
   const [sessionId, setSessionId] = useState<string>("");
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [bottomHeight, setBottomHeight] = useState<number>(300);
   const isResizing = useRef<boolean>(false);
+
+  const [messagesRobot, setMessagesRobot] = useState<Message[]>([]);
+  const [chatRobotInput, setChatRobotInput] = useState<string>("");
+  const chatRobotContainerRef = useRef<HTMLDivElement>(null);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -368,9 +399,54 @@ export default function Page() {
           args = {};
         }
         setMessages(prev => [...prev, { sender: 'ai_tool', functionName: fn.name, toolArgs: args }]);
+        if (fn.name === 'move' && args.direction) {
+          let dx = 0, dz = 0;
+          if (args.direction === 'left') dx = -robotSpeed;
+          else if (args.direction === 'right') dx = robotSpeed;
+          else if (args.direction === 'up') dz = -robotSpeed;
+          else if (args.direction === 'down') dz = robotSpeed;
+          moveBoxman(dx, dz);
+        } else if (fn.name === 'punch') {
+          punchBoxman();
+        }
       });
     } catch (err) {
       console.error('Chat error', err);
+    }
+  }
+
+  async function handleSendRobot(e: React.FormEvent) {
+    e.preventDefault();
+    const input = chatRobotInput.trim();
+    if (!input) return;
+    setMessagesRobot(prev => [...prev, { sender: 'user', text: input }]);
+    setChatRobotInput("");
+    try {
+      const res = await fetch('/api/chat-robot', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ messages: [{ role: 'user', content: input }] }),
+      });
+      const { content, tool_calls } = await res.json();
+      if (content) setMessagesRobot(prev => [...prev, { sender: 'ai', text: content }]);
+      tool_calls?.forEach((call: any) => {
+        const fn = call.function;
+        let args;
+        try { args = typeof fn.arguments === 'string' ? JSON.parse(fn.arguments) : fn.arguments; } catch { args = {}; }
+        setMessagesRobot(prev => [...prev, { sender: 'ai_tool', functionName: fn.name, toolArgs: args }]);
+        if (fn.name === 'move' && args.direction) {
+          let dx = 0, dz = 0;
+          if (args.direction === 'left') dx = -robotSpeed;
+          else if (args.direction === 'right') dx = robotSpeed;
+          else if (args.direction === 'up') dz = -robotSpeed;
+          else if (args.direction === 'down') dz = robotSpeed;
+          moveRobot(dx, dz);
+        } else if (fn.name === 'punch') {
+          punchRobot();
+        }
+      });
+    } catch (err) {
+      console.error('Robot chat error', err);
     }
   }
 
@@ -389,6 +465,7 @@ export default function Page() {
     setSessionId("");
     setActiveTab('chat');
     setMessages([]);
+    setMessagesRobot([]);
   }
 
   useEffect(() => {
@@ -396,6 +473,12 @@ export default function Page() {
       chatContainerRef.current.scrollTo({ top: chatContainerRef.current.scrollHeight, behavior: 'smooth' });
     }
   }, [messages]);
+
+  useEffect(() => {
+    if (chatRobotContainerRef.current) {
+      chatRobotContainerRef.current.scrollTo({ top: chatRobotContainerRef.current.scrollHeight, behavior: 'smooth' });
+    }
+  }, [messagesRobot]);
 
   useEffect(() => {
     function onMouseMove(e: MouseEvent) {
@@ -490,7 +573,7 @@ export default function Page() {
                     className={`btn mx-1 ${activeTab === 'list' ? 'btn-primary' : 'btn-outline'}`}
                     onClick={() => setActiveTab('list')}
                   >
-                    List Enemies
+                   Enemies logs
                   </button>
                   <button
                     className={`btn mx-1 ${activeTab === 'leaderboard' ? 'btn-primary' : 'btn-outline'}`}
@@ -503,6 +586,12 @@ export default function Page() {
                     onClick={() => setActiveTab('movement')}
                   >
                     Movement
+                  </button>
+                  <button
+                    className={`btn mx-1 ${activeTab === 'position' ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setActiveTab('position')}
+                  >
+                    Position
                   </button>
                 </div>
                 <span className="ml-auto mr-2 font-bold">{`${playerName}-${sessionId}`}</span>
@@ -598,9 +687,32 @@ export default function Page() {
                   </form>
                 </>
               ) : activeTab === 'list' ? (
-                <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div>No enemies found.</div>
-                </div>
+                <>
+                  <div ref={chatRobotContainerRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
+                    {messagesRobot.map((msg, idx) => {
+                      if (msg.sender === 'ai' && !msg.text) return null;
+                      if (msg.sender === 'ai_tool') {
+                        return (
+                          <div key={idx} style={{ alignSelf: 'flex-start', background: '#e0f7fa', color: '#006064', borderRadius: '16px', padding: '12px 18px', maxWidth: '85%', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', marginTop: idx === 0 ? 8 : 0 }}>
+                            <b>Function Call:</b> {msg.functionName}<br />
+                            <code>{JSON.stringify(msg.toolArgs)}</code>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={idx} style={{ alignSelf: msg.sender === 'user' ? 'flex-end' : 'flex-start', background: msg.sender === 'user' ? '#222' : '#f1f1f1', color: msg.sender === 'user' ? '#fff' : '#222', borderRadius: '16px', padding: '12px 18px', maxWidth: '85%', boxShadow: '0 1px 3px rgba(0,0,0,0.03)', marginTop: idx === 0 ? 8 : 0 }}>
+                          {msg.sender === 'user' ? <b>{playerName}:</b> : <b>AI Assistant:</b>} {msg.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <form style={{ borderTop: '1px solid #eee', paddingTop: 16, display: 'flex', gap: 8, alignItems: 'center', background: '#fff' }} onSubmit={handleSendRobot}>
+                    <input type="text" placeholder="Type a message..." value={chatRobotInput} onChange={(e) => setChatRobotInput(e.target.value)} style={{ flex: 1, padding: 10, border: '1px solid #ccc', borderRadius: 6, fontSize: 15, outline: 'none' }} />
+                    <button type="submit" style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#222', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
+                      Send
+                    </button>
+                  </form>
+                </>
               ) : activeTab === 'leaderboard' ? (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div>Leaderboard content goes here.</div>
@@ -614,6 +726,37 @@ export default function Page() {
                   </div>
                   <button className="btn" onClick={() => moveRobot(0, robotSpeed)}>Down</button>
                   <button className="btn" onClick={() => punchRobot()}>Punch</button>
+                </div>
+              ) : activeTab === 'position' ? (
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8, padding: 16 }}>
+                  <div>Ground bounds: 20 × 20 units</div>
+                  {(() => {
+                    const scene = gameRef.current?.scene.getScene("MainScene");
+                    if (scene && scene.boxMan && scene.robot) {
+                      return (
+                        <>
+                          <div>BoxMan: x: {scene.boxMan.position.x.toFixed(2)}, y: {scene.boxMan.position.y.toFixed(2)}, z: {scene.boxMan.position.z.toFixed(2)}</div>
+                          <div>Robot: x: {scene.robot.position.x.toFixed(2)}, y: {scene.robot.position.y.toFixed(2)}, z: {scene.robot.position.z.toFixed(2)}</div>
+                          {/* Markdown grid (21×21) */}
+                          <pre style={{ fontFamily: 'monospace', fontSize: '0.6em', marginTop: 8 }}>
+                            {(() => {
+                              const size = 21;
+                              const half = 10;
+                              const grid = Array.from({ length: size }, () => Array(size).fill('.'));
+                              const bx = Math.round(scene.boxMan.position.x) + half;
+                              const bz = Math.round(scene.boxMan.position.z) + half;
+                              const rx = Math.round(scene.robot.position.x) + half;
+                              const rz = Math.round(scene.robot.position.z) + half;
+                              if (bz >= 0 && bz < size && bx >= 0 && bx < size) grid[bz][bx] = 'B';
+                              if (rz >= 0 && rz < size && rx >= 0 && rx < size) grid[rz][rx] = 'R';
+                              return grid.map(row => '| ' + row.join(' | ') + ' |').join('\n');
+                            })()}
+                          </pre>
+                        </>
+                      );
+                    }
+                    return <div>Loading scene...</div>;
+                  })()}
                 </div>
               ) : null}
             </>
