@@ -67,6 +67,7 @@ export default function Page() {
     }
   };
   const punchRobot = () => {
+    setRobotAttack(prev => Math.max(prev - 1, 0));
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
     if (scene && scene.robot) {
@@ -83,12 +84,17 @@ export default function Page() {
             scene.robot.userData.isPunching = true;
             const action = scene.robot.animation.play(punchName);
             if (action) action.timeScale = 3;
-            // push boxMan when robot intersects boxMan
+            // collision & damage
             scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
             const manBB = new Box3().setFromObject(scene.boxMan).expandByScalar(0.2);
             if (manBB.intersectsBox(scene.robotBB)) {
-              const pushDir = new Vector3().subVectors(scene.boxMan.position, scene.robot.position).normalize();
-              scene.boxMan.position.add(pushDir.multiplyScalar(robotSpeed * 5));
+              const prevAtk = robotAttack;
+              if (prevAtk > 0) {
+                setBoxmanHealth(prev => { const h = prev - 1; if (h <= 0) scene.boxMan.visible = false; return h; });
+                setMessages(prev => [...prev, { sender: 'ai', text: "You've been hit by robot" }]);
+                const pushDir = new Vector3().subVectors(scene.boxMan.position, scene.robot.position).normalize();
+                scene.boxMan.position.add(pushDir.multiplyScalar(robotSpeed * 5));
+              }
             }
             setTimeout(() => {
               if (action) action.stop();
@@ -119,10 +125,42 @@ export default function Page() {
     }
   };
   const punchBoxman = () => {
+    setBoxmanAttack(prev => Math.max(prev - 1, 0));
     if (!gameRef.current) return;
     const scene = gameRef.current.scene.getScene("MainScene");
-    if (scene && typeof scene.punchBoxman === "function") {
-      scene.punchBoxman();
+    if (scene && scene.boxMan) {
+      if (scene.boxMan.userData.isDoorPlaying) return;
+      const useLeft = Math.random() < 0.5;
+      const doorName = useLeft ? scene.boxMan.userData.doorLeftName : scene.boxMan.userData.doorRightName;
+      const doorDuration = useLeft ? scene.boxMan.userData.doorLeftDuration : scene.boxMan.userData.doorRightDuration;
+      if (doorName) {
+        const action = scene.boxMan.animation.play(doorName);
+        scene.boxMan.userData.currentAnim = doorName;
+        scene.boxMan.userData.isDoorPlaying = true;
+        const manBB = new Box3().setFromObject(scene.boxMan).expandByScalar(0.2);
+        if (scene.robot) {
+          const proximityBB = scene.robotBB.clone().expandByScalar(0.5);
+          if (manBB.intersectsBox(proximityBB)) {
+            // push robot
+            const pushDir = new Vector3().subVectors(scene.robot.position, scene.boxMan.position).normalize();
+            scene.robot.position.add(pushDir.multiplyScalar(0.5));
+            scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
+            // decrease BoxMan attack and Robot health
+            if (boxmanAttack > 0) {
+              setRobotHealth(prev => { const nh = prev - 1; if (nh <= 0) scene.robot.visible = false; return nh; });
+            }
+          }
+        }
+        setTimeout(() => {
+          if (action) action.stop();
+          scene.boxMan.userData.isDoorPlaying = false;
+          const idleName = scene.boxMan.userData.idleName;
+          if (idleName) {
+            scene.boxMan.animation.play(idleName);
+            scene.boxMan.userData.currentAnim = idleName;
+          }
+        }, doorDuration * 1000);
+      }
     }
   };
 
@@ -168,9 +206,9 @@ export default function Page() {
             bbox.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
             this.boxMan.scale.setScalar(1 / maxDim);
-            this.boxMan.position.set(-5, 0, 0);
+            this.boxMan.position.set(-2, 0, 0);
             this.third.add.existing(this.boxMan);
-            this.boxMan.rotation.y = Math.PI;
+            this.boxMan.rotation.y = Math.PI / 2;
             this.boxMan.userData.rotOffset = this.boxMan.rotation.y;
             this.third.animationMixers.add(this.boxMan.animation.mixer);
             object.animations.forEach((clip: any) => {
@@ -207,8 +245,9 @@ export default function Page() {
             bbox.getSize(size);
             const maxDim = Math.max(size.x, size.y, size.z);
             robotObject.scale.setScalar(3 / maxDim);
-            robotObject.position.set(5, 0, 0);
+            robotObject.position.set(2, 0, 0);
             this.third.add.existing(robotObject);
+            robotObject.rotation.y = -Math.PI / 2;
             this.third.animationMixers.add(robotObject.animation.mixer);
             object.animations.forEach((clip: any) => {
               if (clip.name) robotObject.animation.add(clip.name, clip);
@@ -277,8 +316,8 @@ export default function Page() {
           if (allowX) this.boxMan.position.x += moveX;
           if (allowZ) this.boxMan.position.z += moveZ;
           const moving = allowX || allowZ;
-          const offset = this.boxMan.userData.rotOffset || 0;
-          this.boxMan.rotation.y = offset + Math.atan2(-moveX, -moveZ);
+          // rotate BoxMan to face movement direction
+          this.boxMan.rotation.y = Math.atan2(moveX, moveZ);
           const runName = this.boxMan.userData.runName;
           const idleName = this.boxMan.userData.idleName;
           if (moving && runName) {
@@ -312,9 +351,14 @@ export default function Page() {
             if (this.robot) {
               const proximityBB = this.robotBB.clone().expandByScalar(0.5);
               if (manBB.intersectsBox(proximityBB)) {
+                // push robot
                 const pushDir = new THREE.Vector3().subVectors(this.robot.position, this.boxMan.position).normalize();
                 this.robot.position.add(pushDir.multiplyScalar(0.5));
                 this.robotBB.setFromObject(this.robot).expandByScalar(-0.2);
+                // decrease BoxMan attack and Robot health
+                if (boxmanAttack > 0) {
+                  setRobotHealth(prev => { const nh = prev - 1; if (nh <= 0) this.robot.visible = false; return nh; });
+                }
               }
             }
             setTimeout(() => {
@@ -371,6 +415,15 @@ export default function Page() {
   const [messagesRobot, setMessagesRobot] = useState<Message[]>([]);
   const [chatRobotInput, setChatRobotInput] = useState<string>("");
   const chatRobotContainerRef = useRef<HTMLDivElement>(null);
+
+  const maxBoxmanHealth = 1;
+  const maxBoxmanAttack = 1;
+  const [boxmanHealth, setBoxmanHealth] = useState<number>(maxBoxmanHealth);
+  const [boxmanAttack, setBoxmanAttack] = useState<number>(maxBoxmanAttack);
+  const maxRobotHealth = 1;
+  const maxRobotAttack = 1;
+  const [robotHealth, setRobotHealth] = useState<number>(maxRobotHealth);
+  const [robotAttack, setRobotAttack] = useState<number>(maxRobotAttack);
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
@@ -450,7 +503,34 @@ export default function Page() {
     }
   }
 
-  function handleStart() {
+  const respawnBoxMan = () => {
+    const scene = gameRef.current?.scene.getScene("MainScene");
+    if (scene?.boxMan) {
+      const boundary = 10;
+      const x = Math.random() * 2 * boundary - boundary;
+      const z = Math.random() * 2 * boundary - boundary;
+      scene.boxMan.position.set(x, 0, z);
+      scene.boxMan.visible = true;
+    }
+    setBoxmanHealth(maxBoxmanHealth);
+    setBoxmanAttack(maxBoxmanAttack);
+  };
+
+  const respawnRobot = () => {
+    const scene = gameRef.current?.scene.getScene("MainScene");
+    if (scene?.robot) {
+      const boundary = 10;
+      const x = Math.random() * 2 * boundary - boundary;
+      const z = Math.random() * 2 * boundary - boundary;
+      scene.robot.position.set(x, 0, z);
+      scene.robot.visible = true;
+      scene.robotBB.setFromObject(scene.robot).expandByScalar(-0.2);
+    }
+    setRobotHealth(maxRobotHealth);
+    setRobotAttack(maxRobotAttack);
+  };
+
+  const handleStart = () => {
     if (!playerName.trim()) return;
     const id = Math.random().toString(36).substring(2, 8);
     setSessionId(id);
@@ -459,7 +539,7 @@ export default function Page() {
     setBottomHeight(300);
   }
 
-  function handleLogout() {
+  const handleLogout = () => {
     setStarted(false);
     setPlayerName("");
     setSessionId("");
@@ -601,6 +681,23 @@ export default function Page() {
               </div>
               {activeTab === 'chat' ? (
                 <>
+                
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                        <label style={{ fontWeight: 600 }}>Health {boxmanHealth}/{maxBoxmanHealth}</label>
+                        <button className="btn btn-xs btn-outline">Upgrade</button>
+                      </div>
+                      <progress className="progress w-full progress-success" value={boxmanHealth} max={maxBoxmanHealth} />
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                        <label style={{ fontWeight: 600 }}>Attack {boxmanAttack}/{maxBoxmanAttack}</label>
+                        <button className="btn btn-xs btn-outline">Upgrade</button>
+                      </div>
+                      <progress className="progress w-full progress-error" value={boxmanAttack} max={maxBoxmanAttack} />
+                    </div>
+                  </div>
                   <div ref={chatContainerRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {messages.map((msg, idx) => {
                       // skip empty AI content
@@ -645,49 +742,66 @@ export default function Page() {
                       );
                     })}
                   </div>
-                  <form
-                    style={{
-                      borderTop: '1px solid #eee',
-                      paddingTop: 16,
-                      display: 'flex',
-                      gap: 8,
-                      alignItems: 'center',
-                      background: '#fff',
-                    }}
-                    onSubmit={handleSend}
-                  >
-                    <input
-                      type="text"
-                      placeholder="Type a message..."
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
+                  {boxmanHealth > 0 ? (
+                    <form
                       style={{
-                        flex: 1,
-                        padding: 10,
-                        border: '1px solid #ccc',
-                        borderRadius: 6,
-                        fontSize: 15,
-                        outline: 'none',
+                        borderTop: '1px solid #eee',
+                        paddingTop: 16,
+                        display: 'flex',
+                        gap: 8,
+                        alignItems: 'center',
+                        background: '#fff',
                       }}
-                    />
-                    <button
-                      type="submit"
-                      style={{
-                        padding: '8px 18px',
-                        borderRadius: 6,
-                        border: 'none',
-                        background: '#222',
-                        color: '#fff',
-                        fontWeight: 600,
-                        cursor: 'pointer',
-                      }}
+                      onSubmit={handleSend}
                     >
-                      Send
+                      <input
+                        type="text"
+                        placeholder="Type a message..."
+                        value={chatInput}
+                        onChange={(e) => setChatInput(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: 10,
+                          border: '1px solid #ccc',
+                          borderRadius: 6,
+                          fontSize: 15,
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          padding: '8px 18px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: '#222',
+                          color: '#fff',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Send
+                      </button>
+                    </form>
+                  ) : (
+                    <button className="btn btn-primary mt-2" onClick={respawnBoxMan}>
+                      Respawn
                     </button>
-                  </form>
+                  )}
                 </>
               ) : activeTab === 'list' ? (
                 <>
+                
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <label style={{ fontWeight: 600, marginBottom: 4 }}>Robot Health {robotHealth}/{maxRobotHealth}</label>
+                      <progress className="progress w-full progress-success" value={robotHealth} max={maxRobotHealth} />
+                    </div>
+                    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                      <label style={{ fontWeight: 600, marginBottom: 4 }}>Robot Attack {robotAttack}/{maxRobotAttack}</label>
+                      <progress className="progress w-full progress-error" value={robotAttack} max={maxRobotAttack} />
+                    </div>
+                  </div>
                   <div ref={chatRobotContainerRef} style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, marginTop: 8 }}>
                     {messagesRobot.map((msg, idx) => {
                       if (msg.sender === 'ai' && !msg.text) return null;
@@ -706,12 +820,52 @@ export default function Page() {
                       );
                     })}
                   </div>
-                  <form style={{ borderTop: '1px solid #eee', paddingTop: 16, display: 'flex', gap: 8, alignItems: 'center', background: '#fff' }} onSubmit={handleSendRobot}>
-                    <input type="text" placeholder="Type a message..." value={chatRobotInput} onChange={(e) => setChatRobotInput(e.target.value)} style={{ flex: 1, padding: 10, border: '1px solid #ccc', borderRadius: 6, fontSize: 15, outline: 'none' }} />
-                    <button type="submit" style={{ padding: '8px 18px', borderRadius: 6, border: 'none', background: '#222', color: '#fff', fontWeight: 600, cursor: 'pointer' }}>
-                      Send
+                  {robotHealth > 0 ? (
+                    <form
+                      style={{
+                        borderTop: '1px solid #eee',
+                        paddingTop: 16,
+                        display: 'flex',
+                        gap: 8,
+                        alignItems: 'center',
+                        background: '#fff',
+                      }}
+                      onSubmit={handleSendRobot}
+                    >
+                      <input
+                        type="text"
+                        placeholder="Type a message..."
+                        value={chatRobotInput}
+                        onChange={(e) => setChatRobotInput(e.target.value)}
+                        style={{
+                          flex: 1,
+                          padding: 10,
+                          border: '1px solid #ccc',
+                          borderRadius: 6,
+                          fontSize: 15,
+                          outline: 'none',
+                        }}
+                      />
+                      <button
+                        type="submit"
+                        style={{
+                          padding: '8px 18px',
+                          borderRadius: 6,
+                          border: 'none',
+                          background: '#222',
+                          color: '#fff',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Send
+                      </button>
+                    </form>
+                  ) : (
+                    <button className="btn btn-primary mt-2" onClick={respawnRobot}>
+                      Respawn Robot
                     </button>
-                  </form>
+                  )}
                 </>
               ) : activeTab === 'leaderboard' ? (
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
