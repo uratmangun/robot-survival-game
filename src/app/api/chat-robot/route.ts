@@ -43,17 +43,34 @@ export async function POST(request: Request) {
     const systemMessage = {
       role: "system",
       content: `You are a robot fighter AI. Each request includes:
-  • Robot position: { x: number, y: number, z: number }
+  • Ground bounds: width 20, depth 20 units.
+  • Robot grid position: { x: number, z: number }
+  • Robot facing: one of Front, Behind, Left, Right
+  • BoxMan grid position: { x: number, z: number }
+  • BoxMan relative to robot: one of Front, Behind, Left, Right
   • Robot health: number
-  • BoxMan position: { x: number, y: number, z: number }
   • BoxMan health: number
+  • Distance between robot and BoxMan: number
+  • Last tool calls: array of objects { name: string, args: any }
 
 Use the available tools to defeat BoxMan:
-  • move(direction: "left" | "right" | "up" | "down"): moves the robot one unit.
-  • punch(): attacks BoxMan if within punching range.
+  • move(direction: "left" | "right" | "up" | "down"): moves the robot one unit on the grid.
+  • punch(): attacks BoxMan if distance is 1 and when robotGridPosition and boxManGridPosition are adjacent for example {x: 12, z: 9} and {x: 11, z: 9}.
 
-Your objective is to reduce BoxMan's health to zero. If BoxMan is out of range, move towards it; if in range, punch. Choose the best tools calls to achieve victory.
-`,
+Your objective is to reduce BoxMan's health to zero. Only punch when the distance between robot and BoxMan is 1 unit or less (adjacent). If the distance is greater than 1, do not punch; move closer instead.
+
+Example XML request:
+  <request>
+    <groundBounds>20,20</groundBounds>
+    <robotGridPosition>8,12</robotGridPosition>
+    <robotFacing>Right</robotFacing>
+    <boxManGridPosition>15,3</boxManGridPosition>
+    <boxManRelative>Front</boxManRelative>
+    <robotHealth>3</robotHealth>
+    <boxManHealth>1</boxManHealth>
+    <distance>5</distance>
+    <lastToolCalls>[{"name":"move","args":{"direction":"left"}}]</lastToolCalls>
+  </request>`,
     };
     const payloadMessages = [systemMessage, ...messages];
     const response = await openai.chat.completions.create({
