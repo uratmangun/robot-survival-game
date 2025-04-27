@@ -1,55 +1,63 @@
-# Nero AI Custodial Web
+# Robot Survival Game
 
-The NERO AI Custodial Wallet is an AI-powered chat interface built on Next.js, enabling users to manage NERO blockchain assets through natural language. Users can connect custodial wallets, query balances, initiate transfers, and inspect token details on NERO chain via tool functions.
+This is a 3D boxman-vs-robot survival game built with Next.js, React, and Three.js (via @enable3d/phaser-extension). Control a boxman and fight against Robot in a dynamic arena with real-time physics and AI-driven actions.
 
-# Web demo
-https://lcd-purchases-subaru-trembl.trycloudflare.com/
+## Features
+- 3D game world rendered in-browser.
+- Play as a robot: move, punch, and survive against Robot.
+- Robot is AI-controlled and will attack you.
+- Health, attack, and respawn mechanics for both characters.
+- Grid-based position display and controls.
+- Modern, interactive UI with keyboard and button controls.
 
-# Video demo
-https://youtu.be/1ukIsK-wnzQ
+## Controls
+just prompt it
 
-# List of tools
- - `check_address`: Get the connected wallet address.
- - `check_balance`: Get the balance of the connected wallet or an ERC-20 token if an address is provided.
-   - `address` (string, optional): user address.
- - `faucet`: Show the faucet URL for obtaining testnet tokens.
- - `mint_test_token`: Mint test tokens to the connected wallet.
-   - `amount` (string): amount of test tokens to mint in NERO.
- - `transfer`: Transfer tokens or ETH to a specified address.
-   - `address` (string): recipient address.
-   - `amount` (string): amount to transfer.
-   - `token_name` (string, optional): ERC-20 token name.
+## How to Run
 
-# How to run with docker
+### Prerequisites
+- Node.js (recommended: use [bun](https://bun.sh/) or [pnpm](https://pnpm.io/))
+- Install dependencies:
+  ```fish
+  bun install # or pnpm install
+  ```
+- Copy `.env.example` to `.env` and configure as needed (optional for local dev)
 
-## Prerequisites
-- Copy `.env.example` to `.env` and fill in your API keys.
+### Run the App Locally
+```fish
+bun run dev # or pnpm dev
+```
+The app runs at http://localhost:3000
 
-## Build and Start
+### Build for Production
+```fish
+bun run build # or pnpm build
+bun run start # or pnpm start
+```
+
+## Docker Usage
+
 1. Build the Docker image:
     ```fish
-    docker build -t nero-ai-custodial-web .
+    docker build -t robot-survival-game .
     ```
-2. Create (or reuse) a Docker network for the tunnel:
-    ```fish
-    docker network create nero-net
-    ```
-3. Run your Next.js app container on `nero-net`:
+2. Run the container:
     ```fish
     docker run -d \
-      --network nero-net \
+      -p 3000:3000 \
       --env-file .env \
-      --name nero-ai-custodial-web \
-      nero-ai-custodial-web
+      --name robot-survival-game \
+      robot-survival-game
     ```
-4. Run the Cloudflare Tunnel on the same network:
-    ```fish
-    docker run -d \
-      --network nero-net \
-      --name nero-ai-custodial-tunnel \
-      cloudflare/cloudflared:latest tunnel --url http://nero-ai-custodial-web:3000
-    ```
-5. Check the tunnel logs for your public URL:
-    ```fish
-    docker logs -f nero-ai-custodial-tunnel
-    ```
+
+## Project Structure
+- `src/app/page.tsx`: Main game logic and UI
+- `src/app/api/`: API routes for chat and robot AI
+- `public/`: Static assets (models, textures)
+
+## Credits
+- Built with [Next.js](https://nextjs.org/), [React](https://react.dev/), [Three.js](https://threejs.org/), and [@enable3d/phaser-extension](https://github.com/enable3d/enable3d).
+
+---
+
+Enjoy battling robot and surviving as long as you can!
